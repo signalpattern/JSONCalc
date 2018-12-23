@@ -1,0 +1,19 @@
+{
+  "name": "dynon",
+  "version": "1.0.0",
+  "description": "Dynamic Object Notation",
+  "main": "DynON.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "author": "Jim Heising <jheising@gmail.com>",
+  "license": "ISC",
+  "dependencies": {
+    "lodash": "^4.17.11",
+    "string-replace-async": "^1.2.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^23.3.10",
+    "jest": "^23.6.0"
+  }
+}
