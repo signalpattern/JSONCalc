@@ -1,4 +1,4 @@
-#DynON - Dynamic Object Notation
+# DynON - Dynamic Object Notation
 
 DynON is a (100% compatible) format of JSON that allows objects to contain references to other JSON objects— similar to [JSON Reference](https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03), but more powerful.
 
