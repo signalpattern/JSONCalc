@@ -13,6 +13,7 @@ export declare class DynON {
     static PROVIDER_PREFIX: string;
     static REFERENCE_PROVIDER_KEY: string;
     private static _extractReferences;
+    private static _extractReferenceProviderData;
     /**
      * Will parse a reference path into the individual constituents.
      * @param referenceString - A string in the form of `[remoteURI#]localPath`. See readme for more details.

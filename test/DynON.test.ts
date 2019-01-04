@@ -3,7 +3,8 @@ import {DynON} from "../DynON";
 let remoteDocs = {
     "test/test": {
         "object1": "Object 1 Remote",
-        "object2": "Object 2 Remote"
+        "object2": "{{test}}",
+        "test": "Object 2 Remote"
     }
 };
 
@@ -103,6 +104,36 @@ test("executing a simple action", async () => {
                 status: 200,
                 url: "http://www.google.com"
             },
+            "test2": {
+                status: 200,
+                url: {
+                    status: 200,
+                    url: "http://www.google.com"
+                }
+            }
+        });
+});
+
+test("executing a complex action", async () => {
+    expect(await DynON.fillReferences({
+        "test1": {"$ref": "get_google.url"},
+        "test2": {"$ref": "get_multi"}
+    }, {
+        "get_google": {
+            "$http": {
+                "url": "http://www.google.com"
+            }
+        },
+        "get_multi": {
+            "$http": {
+                "url": {
+                    "$ref": "get_google"
+                }
+            }
+        }
+    }, remoteDocProvider, actionExecutionProvider))
+        .toEqual({
+            "test1": "http://www.google.com",
             "test2": {
                 status: 200,
                 url: {

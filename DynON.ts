@@ -1,4 +1,4 @@
-import {get, set, isString, isObjectLike, each, map, has, isNil, cloneDeep, uniqBy, findKey} from "lodash";
+import {get, set, isString, isObjectLike, each, map, has, isNil, cloneDeep, uniqBy, findKey, toPath} from "lodash";
 import * as stringReplaceAsync from "string-replace-async";
 
 type RemoteDocs = { [location: string]: any };
@@ -10,6 +10,12 @@ export interface Reference {
     location?: string;
     objectPath?: string;
 }
+
+interface ReferenceProviderData {
+    name: string;
+    options: any;
+}
+
 
 export type RemoteDocProvider = (location: string) => Promise<any>;
 export type CustomDataProvider = (providerName: string, providerOptions?: any) => Promise<any>;
@@ -51,6 +57,21 @@ export class DynON {
         }
 
         return uniqBy(foundReferences, (reference: Reference) => reference.location + reference.objectPath);
+    }
+
+    private static _extractReferenceProviderData(theObject: object): ReferenceProviderData {
+        let providerName = findKey(theObject, (keyValue, keyName) => {
+            return keyName.indexOf(DynON.PROVIDER_PREFIX) === 0;
+        });
+
+        if (!isNil(providerName)) {
+            return {
+                name: providerName,
+                options: get(theObject, providerName)
+            };
+        }
+
+        return null;
     }
 
     /**
@@ -98,19 +119,40 @@ export class DynON {
 
         let value;
 
-        // Get this from a local value
-        if (isNil(location)) {
-            value = get(dataDoc, objectPath);
-        } else {
-            let remoteDoc = remoteDocs[location];
+        // This is a remote document
+        if(!isNil(location))
+        {
+            dataDoc = remoteDocs[location];
 
-            if (isNil(remoteDoc) && !isNil(remoteDocProvider)) {
-                remoteDoc = await remoteDocProvider(location);
-                remoteDocs[location] = remoteDoc;
+            if (isNil(dataDoc) && !isNil(remoteDocProvider)) {
+                dataDoc = await remoteDocProvider(location);
+                remoteDocs[location] = dataDoc;
             }
-
-            value = get(remoteDoc, objectPath);
         }
+
+        // Traverse down the object path to see if it has any object references
+        let objectPathParts = toPath(objectPath);
+        let currentObjectPath = [];
+        if(objectPathParts.length > 0)
+        {
+            for(let objectPathPart of objectPathParts)
+            {
+                currentObjectPath.push(objectPathPart);
+
+                let value = get(dataDoc, currentObjectPath);
+                let providerData = DynON._extractReferenceProviderData(value);
+
+                // If this contains an object reference, we need to fill the reference before we can go any further
+                if(!isNil(providerData))
+                {
+                    let result = await DynON._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
+                    set(dataDoc, currentObjectPath, result);
+                    break;
+                }
+            }
+        }
+
+        value = get(dataDoc, objectPath);
 
         return await DynON._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
     }
@@ -143,24 +185,21 @@ export class DynON {
 
         } else if (isObjectLike(objectOrString)) {
 
-            let providerKey = findKey(objectOrString, (keyValue, keyName) => {
-                return keyName.indexOf(DynON.PROVIDER_PREFIX) === 0;
-            });
-            let providerOptions = get(objectOrString, providerKey);
+            let providerData = DynON._extractReferenceProviderData(objectOrString as object);
 
-            if (providerKey === DynON.REFERENCE_PROVIDER_KEY && isString(providerOptions)) {
-                let reference = DynON.parseReferencePath(providerOptions);
-                return await DynON._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
-            } else if (!isNil(providerKey)) {
-                providerOptions = await DynON._fillReferences(providerOptions, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
+            if (!isNil(providerData)) {
+                if (providerData.name === DynON.REFERENCE_PROVIDER_KEY && isString(providerData.options)) {
+                    let reference = DynON.parseReferencePath(providerData.options);
+                    return await DynON._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                } else {
+                    providerData.options = await DynON._fillReferences(providerData.options, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
 
-                if(!isNil(customDataProvider))
-                {
-                    return await customDataProvider(providerKey, providerOptions);
+                    if (!isNil(customDataProvider)) {
+                        return await customDataProvider(providerData.name, providerData.options);
+                    }
+
+                    return undefined;
                 }
-
-                return undefined;
-
             } else {
 
                 let actions = map(objectOrString, (value, key) => {
@@ -201,19 +240,17 @@ export class DynON {
      * @param customDataProvider - A callback that will be invoked when a custom data accessor is encountered.
      * @param defaultValue - If no value is found, this optional value will be returned.
      */
-    static async get(object:object,
-                     path:string | string[],
+    static async get(object: object,
+                     path: string | string[],
                      remoteDocProvider?: RemoteDocProvider,
                      customDataProvider?: CustomDataProvider,
-                     defaultValue?:any): Promise<any>
-    {
+                     defaultValue?: any): Promise<any> {
         let dataDoc = cloneDeep(object);
         let value = isNil(path) || path.length === 0 ? dataDoc : get(object, path);
 
         value = await DynON.fillReferences(value, dataDoc, remoteDocProvider, customDataProvider);
 
-        if(isNil(value))
-        {
+        if (isNil(value)) {
             return defaultValue;
         }
 
