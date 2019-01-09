@@ -20,19 +20,20 @@ interface ReferenceProviderData {
 export type RemoteDocProvider = (location: string) => Promise<any>;
 export type CustomDataProvider = (providerName: string, providerOptions?: any) => Promise<any>;
 
-export class DynON {
+export class JSONCalc {
 
     static REFERENCE_PATH = "(?:(.+?)#)?(.+)";
     static STRING_REFERENCE = `{{(?:(.+?)#)?(.+?)}}`;
     static PROVIDER_PREFIX = "$";
-    static REFERENCE_PROVIDER_KEY = `${DynON.PROVIDER_PREFIX}ref`;
+    static REFERENCE_PROVIDER_KEY = `${JSONCalc.PROVIDER_PREFIX}ref`;
+    static MISSING_VALUE_PLACEHOLDER = "#VALUE!";
 
     private static _extractReferences(objectOrString: any, path: string[]): Reference[] {
         let foundReferences: Reference[] = [];
 
         if (isString(objectOrString)) {
             // Extract references in the form of {{something}} from strings
-            (objectOrString as string).replace(new RegExp(DynON.STRING_REFERENCE, "g"), (fullRef, location, objectPath) => {
+            (objectOrString as string).replace(new RegExp(JSONCalc.STRING_REFERENCE, "g"), (fullRef, location, objectPath) => {
                 foundReferences.push({
                     location: location,
                     objectPath: objectPath
@@ -41,9 +42,9 @@ export class DynON {
             });
         } else if (isObjectLike(objectOrString)) {
             // Look for values that look like {$:"something"}
-            let objectValue = get(objectOrString, DynON.REFERENCE_PROVIDER_KEY);
+            let objectValue = get(objectOrString, JSONCalc.REFERENCE_PROVIDER_KEY);
             if (isString(objectValue)) {
-                let reference = DynON.parseReferencePath(objectValue);
+                let reference = JSONCalc.parseReferencePath(objectValue);
                 if (!isNil(reference)) {
                     foundReferences.push(reference);
                 }
@@ -51,7 +52,7 @@ export class DynON {
             {
                 each(objectOrString, (value, key) => {
                     let childPath = path.concat([key]);
-                    foundReferences = foundReferences.concat(DynON._extractReferences(value, childPath));
+                    foundReferences = foundReferences.concat(JSONCalc._extractReferences(value, childPath));
                 });
             }
         }
@@ -61,7 +62,7 @@ export class DynON {
 
     private static _extractReferenceProviderData(theObject: object): ReferenceProviderData {
         let providerName = findKey(theObject, (keyValue, keyName) => {
-            return keyName.indexOf(DynON.PROVIDER_PREFIX) === 0;
+            return keyName.indexOf(JSONCalc.PROVIDER_PREFIX) === 0;
         });
 
         if (!isNil(providerName)) {
@@ -82,7 +83,7 @@ export class DynON {
 
         let returnReference: Reference;
 
-        referenceString.replace(new RegExp(DynON.REFERENCE_PATH), (fullRef, location, objectPath) => {
+        referenceString.replace(new RegExp(JSONCalc.REFERENCE_PATH), (fullRef, location, objectPath) => {
 
             returnReference = {
                 location: location,
@@ -100,7 +101,7 @@ export class DynON {
      * @param objectOrString - The string or object to extract references from.
      */
     static extractReferences(objectOrString: any): Reference[] {
-        return DynON._extractReferences(objectOrString, []);
+        return JSONCalc._extractReferences(objectOrString, []);
     }
 
     private static async _getReferenceValue(dataDoc: any,
@@ -140,12 +141,12 @@ export class DynON {
                 currentObjectPath.push(objectPathPart);
 
                 let value = get(dataDoc, currentObjectPath);
-                let providerData = DynON._extractReferenceProviderData(value);
+                let providerData = JSONCalc._extractReferenceProviderData(value);
 
                 // If this contains an object reference, we need to fill the reference before we can go any further
                 if(!isNil(providerData))
                 {
-                    let result = await DynON._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
+                    let result = await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
                     set(dataDoc, currentObjectPath, result);
                     break;
                 }
@@ -154,7 +155,7 @@ export class DynON {
 
         value = get(dataDoc, objectPath);
 
-        return await DynON._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
+        return await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
     }
 
     private static async _fillReferences(objectOrString: string | object,
@@ -165,15 +166,15 @@ export class DynON {
                                          stack: string[] = []): Promise<any> {
         if (isString(objectOrString)) {
 
-            return await stringReplaceAsync(
+            return stringReplaceAsync(
                 (objectOrString as string),
-                new RegExp(DynON.STRING_REFERENCE, "g"),
+                new RegExp(JSONCalc.STRING_REFERENCE, "g"),
                 async (fullRef, location, objectPath) => {
 
-                    let value = await DynON._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                    let value = await JSONCalc._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
 
                     if (isNil(value)) {
-                        value = "";
+                        value = JSONCalc.MISSING_VALUE_PLACEHOLDER;
                     } else if (isObjectLike(value)) {
                         value = JSON.stringify(value);
                     } else {
@@ -185,26 +186,26 @@ export class DynON {
 
         } else if (isObjectLike(objectOrString)) {
 
-            let providerData = DynON._extractReferenceProviderData(objectOrString as object);
+            let providerData = JSONCalc._extractReferenceProviderData(objectOrString as object);
 
             if (!isNil(providerData)) {
-                if (providerData.name === DynON.REFERENCE_PROVIDER_KEY && isString(providerData.options)) {
-                    let reference = DynON.parseReferencePath(providerData.options);
-                    return await DynON._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                if (providerData.name === JSONCalc.REFERENCE_PROVIDER_KEY && isString(providerData.options)) {
+                    let reference = JSONCalc.parseReferencePath(providerData.options);
+                    return await JSONCalc._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
                 } else {
-                    providerData.options = await DynON._fillReferences(providerData.options, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                    providerData.options = await JSONCalc._fillReferences(providerData.options, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
 
                     if (!isNil(customDataProvider)) {
                         return await customDataProvider(providerData.name, providerData.options);
                     }
 
-                    return undefined;
+                    return JSONCalc.MISSING_VALUE_PLACEHOLDER;
                 }
             } else {
 
                 let actions = map(objectOrString, (value, key) => {
                     return new Promise((resolve, reject) => {
-                        DynON._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack).then((value) => {
+                        JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack).then((value) => {
                             objectOrString[key] = value;
                             resolve();
                         }).catch(reject);
@@ -229,7 +230,7 @@ export class DynON {
                                 dataDoc: any,
                                 remoteDocProvider?: RemoteDocProvider,
                                 customDataProvider?: CustomDataProvider): Promise<any> {
-        return DynON._fillReferences(objectOrString, dataDoc, remoteDocProvider, {}, customDataProvider);
+        return JSONCalc._fillReferences(objectOrString, dataDoc, remoteDocProvider, {}, customDataProvider);
     }
 
     /**
@@ -248,7 +249,7 @@ export class DynON {
         let dataDoc = cloneDeep(object);
         let value = isNil(path) || path.length === 0 ? dataDoc : get(object, path);
 
-        value = await DynON.fillReferences(value, dataDoc, remoteDocProvider, customDataProvider);
+        value = await JSONCalc.fillReferences(value, dataDoc, remoteDocProvider, customDataProvider);
 
         if (isNil(value)) {
             return defaultValue;

@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/../DynON/.idea/DynON.iml" filepath="$PROJECT_DIR$/../DynON/.idea/DynON.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/JSONCalc.iml" filepath="$PROJECT_DIR$/.idea/JSONCalc.iml" />
     </modules>
   </component>
 </project>

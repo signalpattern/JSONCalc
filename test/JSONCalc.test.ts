@@ -1,4 +1,4 @@
-import {DynON} from "../DynON";
+import {JSONCalc} from "../JSONCalc";
 
 let remoteDocs = {
     "test/test": {
@@ -24,17 +24,17 @@ async function actionExecutionProvider(actionName: string, actionOptions?: any):
 }
 
 test("parsing a local reference path", () => {
-    expect(DynON.parseReferencePath("foo.bar.test"))
+    expect(JSONCalc.parseReferencePath("foo.bar.test"))
         .toEqual({location: undefined, objectPath: "foo.bar.test"});
 });
 
 test("parsing a remote reference path", () => {
-    expect(DynON.parseReferencePath("test/test#foo.bar.test"))
+    expect(JSONCalc.parseReferencePath("test/test#foo.bar.test"))
         .toEqual({location: "test/test", objectPath: "foo.bar.test"});
 });
 
 test("extracting references", () => {
-    expect(DynON.extractReferences({
+    expect(JSONCalc.extractReferences({
         "test1": "{{object1}}",
         "test2": "{{test/test#object1}}",
         "test3": {"$ref": "object2"},
@@ -51,7 +51,7 @@ test("extracting references", () => {
 });
 
 test("filling references", async () => {
-    expect(await DynON.fillReferences({
+    expect(await JSONCalc.fillReferences({
         "test1": "{{object1}}",
         "test2": "{{test/test#object1}}",
         "test3": {"$ref": "object2"},
@@ -69,7 +69,7 @@ test("filling references", async () => {
 });
 
 test("catching circular references", async () => {
-    await expect(DynON.fillReferences({
+    await expect(JSONCalc.fillReferences({
         "test1": "{{object1}}"
     }, {
         "object1": "{{object2.level1}}",
@@ -81,8 +81,8 @@ test("catching circular references", async () => {
         .toThrow()
 });
 
-test("executing a simple action", async () => {
-    expect(await DynON.fillReferences({
+test("executing a simple action 2", async () => {
+    expect(await JSONCalc.fillReferences({
         "test1": {"$ref": "get_google"},
         "test2": {"$ref": "get_multi"}
     }, {
@@ -115,7 +115,7 @@ test("executing a simple action", async () => {
 });
 
 test("executing a complex action", async () => {
-    expect(await DynON.fillReferences({
+    expect(await JSONCalc.fillReferences({
         "test1": {"$ref": "get_google.url"},
         "test2": {"$ref": "get_multi"}
     }, {

@@ -1,6 +1,6 @@
-# DynON - Dynamic Object Notation
+# JSONCalc
 
-DynON is a (100% compatible) format of JSON that allows objects to contain references to other JSON objects— similar to [JSON Reference](https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03), but more powerful.
+JSONCalc is a library that parses and fills in references to data in the same or other JSON documents, similar to [JSON Reference](https://tools.ietf.org/html/draft-pbryan-zyp-json-ref-03), but more powerful.
 
 #### Features
 
@@ -62,4 +62,4 @@ DynON also allows for custom data accessors which can be used to return data fro
 }
 ```
 
-Any time the DynON parser encounters a key that begins with `$`, it will invoke a callback function in the implementing program and ask it to return a value.
+Any time the JSONDoc parser encounters a key that begins with `$`, it will invoke a callback function in the implementing program and ask it to return a value.
