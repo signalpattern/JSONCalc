@@ -1,4 +1,4 @@
-import {get, set, isString, isObjectLike, each, map, has, isNil, cloneDeep, uniqBy, findKey, toPath} from "lodash";
+import {get, set, isString, isObjectLike, each, map, has, isNil, cloneDeep, uniqBy, findKey, toPath, isUndefined} from "lodash";
 import * as stringReplaceAsync from "string-replace-async";
 
 type RemoteDocs = { [location: string]: any };
@@ -195,11 +195,13 @@ export class JSONCalc {
                 } else {
                     providerData.options = await JSONCalc._fillReferences(providerData.options, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
 
+                    let customData;
                     if (!isNil(customDataProvider)) {
-                        return await customDataProvider(providerData.name, providerData.options);
+                        customData = await customDataProvider(providerData.name, providerData.options);
+
                     }
 
-                    return JSONCalc.MISSING_VALUE_PLACEHOLDER;
+                    return isUndefined(customData) ? objectOrString : customData;
                 }
             } else {
 

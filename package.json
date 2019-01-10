@@ -2,7 +2,7 @@
   "name": "dynon",
   "version": "1.0.0",
   "description": "Dynamic Object Notation",
-  "main": "DynON.js",
+  "main": "JSONCalc.js",
   "scripts": {
     "test": "jest"
   },
