@@ -1,6 +1,6 @@
 {
   "name": "jsoncalc",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "JSONCalc is a library that parses and fills in references to data in the same or other JSON documents, similar to JSON Reference, but more powerful.",
   "main": "JSONCalc.js",
   "scripts": {
