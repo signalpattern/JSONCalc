@@ -154,7 +154,6 @@ export class JSONCalc {
         }
 
         value = get(dataDoc, objectPath);
-
         return await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
     }
 
@@ -171,17 +170,22 @@ export class JSONCalc {
                 new RegExp(JSONCalc.STRING_REFERENCE, "g"),
                 async (fullRef, location, objectPath) => {
 
-                    let value = await JSONCalc._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                    try {
+                        let value = await JSONCalc._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
 
-                    if (isNil(value)) {
-                        value = JSONCalc.MISSING_VALUE_PLACEHOLDER;
-                    } else if (isObjectLike(value)) {
-                        value = JSON.stringify(value);
-                    } else {
-                        value = value.toString();
+                        if (isNil(value)) {
+                            value = JSONCalc.MISSING_VALUE_PLACEHOLDER;
+                        } else if (isObjectLike(value)) {
+                            value = JSON.stringify(value);
+                        } else {
+                            value = value.toString();
+                        }
+
+                        return value;
                     }
-
-                    return value;
+                    catch (e) {
+                        return e;
+                    }
                 });
 
         } else if (isObjectLike(objectOrString)) {
@@ -191,7 +195,11 @@ export class JSONCalc {
             if (!isNil(providerData)) {
                 if (providerData.name === JSONCalc.REFERENCE_PROVIDER_KEY && isString(providerData.options)) {
                     let reference = JSONCalc.parseReferencePath(providerData.options);
-                    return await JSONCalc._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                    try{
+                        return await JSONCalc._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                    }catch (e) {
+                        return e;
+                    }
                 } else {
                     providerData.options = await JSONCalc._fillReferences(providerData.options, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
 
