@@ -1,7 +1,7 @@
 {
-  "name": "dynon",
-  "version": "1.0.0",
-  "description": "Dynamic Object Notation",
+  "name": "jsoncalc",
+  "version": "1.0.1",
+  "description": "JSONCalc is a library that parses and fills in references to data in the same or other JSON documents, similar to JSON Reference, but more powerful.",
   "main": "JSONCalc.js",
   "scripts": {
     "test": "jest"
