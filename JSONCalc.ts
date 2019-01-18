@@ -118,6 +118,8 @@ export class JSONCalc {
             throw new Error(`Document contains a circular reference: ${stack.join("->")}`);
         }
 
+        stack = stack.concat([stackID]);
+
         let value;
 
         // This is a remote document
@@ -146,7 +148,7 @@ export class JSONCalc {
                 // If this contains an object reference, we need to fill the reference before we can go any further
                 if(!isNil(providerData))
                 {
-                    let result = await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
+                    let result = await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
                     set(dataDoc, currentObjectPath, result);
                     break;
                 }
@@ -154,7 +156,7 @@ export class JSONCalc {
         }
 
         value = cloneDeep(get(dataDoc, objectPath));
-        return await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
+        return await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
     }
 
     private static async _fillReferences(objectOrString: string | object,

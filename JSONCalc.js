@@ -82,6 +82,7 @@ class JSONCalc {
             if (stack.indexOf(stackID) !== -1) {
                 throw new Error(`Document contains a circular reference: ${stack.join("->")}`);
             }
+            stack = stack.concat([stackID]);
             let value;
             // This is a remote document
             if (!lodash_1.isNil(location)) {
@@ -101,14 +102,14 @@ class JSONCalc {
                     let providerData = JSONCalc._extractReferenceProviderData(value);
                     // If this contains an object reference, we need to fill the reference before we can go any further
                     if (!lodash_1.isNil(providerData)) {
-                        let result = yield JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
+                        let result = yield JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
                         lodash_1.set(dataDoc, currentObjectPath, result);
                         break;
                     }
                 }
             }
             value = lodash_1.cloneDeep(lodash_1.get(dataDoc, objectPath));
-            return yield JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
+            return yield JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
         });
     }
     static _fillReferences(objectOrString, dataDoc, remoteDocProvider, remoteDocs = {}, customDataProvider, stack = []) {
