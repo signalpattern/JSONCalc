@@ -108,7 +108,14 @@ class JSONCalc {
                     }
                 }
             }
-            value = lodash_1.cloneDeep(lodash_1.get(dataDoc, objectPath));
+            // Does this value exist in our data doc?
+            if (lodash_1.has(dataDoc, objectPath)) {
+                value = lodash_1.cloneDeep(lodash_1.get(dataDoc, objectPath));
+            }
+            else if (!lodash_1.isNil(customDataProvider)) {
+                // If this value doesn't exist, allow the CustomDataProvider to provide a value
+                value = yield customDataProvider("$ref", objectPath);
+            }
             return yield JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
         });
     }
@@ -116,22 +123,21 @@ class JSONCalc {
         return __awaiter(this, void 0, void 0, function* () {
             if (lodash_1.isString(objectOrString)) {
                 return stringReplaceAsync(objectOrString, new RegExp(JSONCalc.STRING_REFERENCE, "g"), (fullRef, location, objectPath) => __awaiter(this, void 0, void 0, function* () {
-                    try {
-                        let value = yield JSONCalc._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
-                        if (lodash_1.isNil(value)) {
-                            value = JSONCalc.MISSING_VALUE_PLACEHOLDER;
-                        }
-                        else if (lodash_1.isObjectLike(value)) {
-                            value = JSON.stringify(value);
-                        }
-                        else {
-                            value = value.toString();
-                        }
-                        return value;
+                    //try {
+                    let value = yield JSONCalc._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                    if (lodash_1.isNil(value)) {
+                        value = JSONCalc.MISSING_VALUE_PLACEHOLDER;
                     }
-                    catch (e) {
+                    else if (lodash_1.isObjectLike(value)) {
+                        value = JSON.stringify(value);
+                    }
+                    else {
+                        value = value.toString();
+                    }
+                    return value;
+                    /*} catch (e) {
                         return e;
-                    }
+                    }*/
                 }));
             }
             else if (lodash_1.isObjectLike(objectOrString)) {

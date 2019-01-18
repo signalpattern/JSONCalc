@@ -123,8 +123,7 @@ export class JSONCalc {
         let value;
 
         // This is a remote document
-        if(!isNil(location))
-        {
+        if (!isNil(location)) {
             dataDoc = remoteDocs[location];
 
             if (isNil(dataDoc) && !isNil(remoteDocProvider)) {
@@ -136,18 +135,15 @@ export class JSONCalc {
         // Traverse down the object path to see if it has any object references
         let objectPathParts = toPath(objectPath);
         let currentObjectPath = [];
-        if(objectPathParts.length > 0)
-        {
-            for(let objectPathPart of objectPathParts)
-            {
+        if (objectPathParts.length > 0) {
+            for (let objectPathPart of objectPathParts) {
                 currentObjectPath.push(objectPathPart);
 
                 let value = get(dataDoc, currentObjectPath);
                 let providerData = JSONCalc._extractReferenceProviderData(value);
 
                 // If this contains an object reference, we need to fill the reference before we can go any further
-                if(!isNil(providerData))
-                {
+                if (!isNil(providerData)) {
                     let result = await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
                     set(dataDoc, currentObjectPath, result);
                     break;
@@ -155,7 +151,17 @@ export class JSONCalc {
             }
         }
 
-        value = cloneDeep(get(dataDoc, objectPath));
+        // Does this value exist in our data doc?
+        if(has(dataDoc, objectPath))
+        {
+            value = cloneDeep(get(dataDoc, objectPath));
+        }
+        else if(!isNil(customDataProvider))
+        {
+            // If this value doesn't exist, allow the CustomDataProvider to provide a value
+            value = await customDataProvider("$ref", objectPath);
+        }
+
         return await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
     }
 
@@ -172,7 +178,7 @@ export class JSONCalc {
                 new RegExp(JSONCalc.STRING_REFERENCE, "g"),
                 async (fullRef, location, objectPath) => {
 
-                    try {
+                    //try {
                         let value = await JSONCalc._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
 
                         if (isNil(value)) {
@@ -184,10 +190,9 @@ export class JSONCalc {
                         }
 
                         return value;
-                    }
-                    catch (e) {
+                    /*} catch (e) {
                         return e;
-                    }
+                    }*/
                 });
 
         } else if (isObjectLike(objectOrString)) {
@@ -197,9 +202,9 @@ export class JSONCalc {
             if (!isNil(providerData)) {
                 if (providerData.name === JSONCalc.REFERENCE_PROVIDER_KEY && isString(providerData.options)) {
                     let reference = JSONCalc.parseReferencePath(providerData.options);
-                    try{
+                    try {
                         return await JSONCalc._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
-                    }catch (e) {
+                    } catch (e) {
                         return e;
                     }
                 } else {

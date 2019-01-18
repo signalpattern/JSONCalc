@@ -20,6 +20,9 @@ async function actionExecutionProvider(actionName: string, actionOptions?: any):
                 url: actionOptions.url
             };
         }
+        case "$ref": {
+            return "unknown";
+        }
     }
 }
 
@@ -65,6 +68,15 @@ test("filling references", async () => {
             "test2": "Object 1 Remote",
             "test3": "Object 2 Local",
             "test4": "Object 2 Remote"
+        });
+});
+
+test("filling references with an unknown reference", async () => {
+    expect(await JSONCalc.fillReferences({
+        "test1": "{{object1}}",
+    }, {}, remoteDocProvider, actionExecutionProvider))
+        .toEqual({
+            "test1": "unknown"
         });
 });
 

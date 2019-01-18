@@ -30,6 +30,9 @@ function actionExecutionProvider(actionName, actionOptions) {
                     url: actionOptions.url
                 };
             }
+            case "$ref": {
+                return "unknown";
+            }
         }
     });
 }
@@ -70,6 +73,14 @@ test("filling references", () => __awaiter(this, void 0, void 0, function* () {
         "test2": "Object 1 Remote",
         "test3": "Object 2 Local",
         "test4": "Object 2 Remote"
+    });
+}));
+test("filling references with an unknown reference", () => __awaiter(this, void 0, void 0, function* () {
+    expect(yield JSONCalc_1.JSONCalc.fillReferences({
+        "test1": "{{object1}}",
+    }, {}, remoteDocProvider, actionExecutionProvider))
+        .toEqual({
+        "test1": "unknown"
     });
 }));
 test("catching circular references", () => __awaiter(this, void 0, void 0, function* () {
