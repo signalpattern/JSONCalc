@@ -153,7 +153,7 @@ export class JSONCalc {
             }
         }
 
-        value = get(dataDoc, objectPath);
+        value = cloneDeep(get(dataDoc, objectPath));
         return await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
     }
 

@@ -107,7 +107,7 @@ class JSONCalc {
                     }
                 }
             }
-            value = lodash_1.get(dataDoc, objectPath);
+            value = lodash_1.cloneDeep(lodash_1.get(dataDoc, objectPath));
             return yield JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat([stackID]));
         });
     }
