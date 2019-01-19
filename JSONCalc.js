@@ -114,7 +114,7 @@ class JSONCalc {
             }
             else if (!lodash_1.isNil(customDataProvider)) {
                 // If this value doesn't exist, allow the CustomDataProvider to provide a value
-                value = yield customDataProvider("$ref", objectPath);
+                value = yield customDataProvider("$ref", objectPath, stack);
             }
             return yield JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
         });
@@ -156,7 +156,7 @@ class JSONCalc {
                         providerData.options = yield JSONCalc._fillReferences(providerData.options, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
                         let customData;
                         if (!lodash_1.isNil(customDataProvider)) {
-                            customData = yield customDataProvider(providerData.name, providerData.options);
+                            customData = yield customDataProvider(providerData.name, providerData.options, stack);
                         }
                         return lodash_1.isUndefined(customData) ? objectOrString : customData;
                     }

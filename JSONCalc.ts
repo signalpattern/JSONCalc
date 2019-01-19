@@ -18,7 +18,7 @@ interface ReferenceProviderData {
 
 
 export type RemoteDocProvider = (location: string) => Promise<any>;
-export type CustomDataProvider = (providerName: string, providerOptions?: any) => Promise<any>;
+export type CustomDataProvider = (providerName: string, providerOptions?: any, path?:string[]) => Promise<any>;
 
 export class JSONCalc {
 
@@ -159,7 +159,7 @@ export class JSONCalc {
         else if(!isNil(customDataProvider))
         {
             // If this value doesn't exist, allow the CustomDataProvider to provide a value
-            value = await customDataProvider("$ref", objectPath);
+            value = await customDataProvider("$ref", objectPath, stack);
         }
 
         return await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
@@ -212,7 +212,7 @@ export class JSONCalc {
 
                     let customData;
                     if (!isNil(customDataProvider)) {
-                        customData = await customDataProvider(providerData.name, providerData.options);
+                        customData = await customDataProvider(providerData.name, providerData.options, stack);
 
                     }
 
