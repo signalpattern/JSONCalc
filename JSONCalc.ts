@@ -18,7 +18,7 @@ interface ReferenceProviderData {
 
 
 export type RemoteDocProvider = (location: string) => Promise<any>;
-export type CustomDataProvider = (providerName: string, providerOptions?: any, path?:string[]) => Promise<any>;
+export type CustomDataProvider = (providerName: string, providerOptions?: any, dataPath?: string[]) => Promise<any>;
 
 export class JSONCalc {
 
@@ -110,12 +110,14 @@ export class JSONCalc {
                                             remoteDocProvider: RemoteDocProvider,
                                             remoteDocs: RemoteDocs = {},
                                             customDataProvider: CustomDataProvider,
-                                            stack: string[] = []): Promise<any> {
+                                            stack: string[] = [],
+                                            dataPath:string[] = [],
+                                            docID?:string): Promise<any> {
 
         let stackID = `${isNil(location) ? "" : `${location}#`}${objectPath}`;
 
         if (stack.indexOf(stackID) !== -1) {
-            throw new Error(`Document contains a circular reference: ${stack.join("->")}`);
+            throw new Error(`Circular reference: ${stack.join("->")}`);
         }
 
         stack = stack.concat([stackID]);
@@ -130,6 +132,8 @@ export class JSONCalc {
                 dataDoc = await remoteDocProvider(location);
                 remoteDocs[location] = dataDoc;
             }
+
+            docID = location;
         }
 
         // Traverse down the object path to see if it has any object references
@@ -142,27 +146,30 @@ export class JSONCalc {
                 let value = get(dataDoc, currentObjectPath);
                 let providerData = JSONCalc._extractReferenceProviderData(value);
 
+                let newDataPath = cloneDeep(currentObjectPath);
+
+                if(!isNil(docID) && newDataPath.length > 0)
+                {
+                    newDataPath[0] = `${docID}#${newDataPath[0]}`;
+                }
+
                 // If this contains an object reference, we need to fill the reference before we can go any further
                 if (!isNil(providerData)) {
-                    let result = await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                    let result = await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack, newDataPath, docID);
                     set(dataDoc, currentObjectPath, result);
                     break;
                 }
             }
         }
 
-        // Does this value exist in our data doc?
-        if(has(dataDoc, objectPath))
-        {
-            value = cloneDeep(get(dataDoc, objectPath));
-        }
-        else if(!isNil(customDataProvider))
-        {
+        value = cloneDeep(get(dataDoc, objectPath));
+
+        if (isUndefined(value) && !isNil(customDataProvider)) {
             // If this value doesn't exist, allow the CustomDataProvider to provide a value
-            value = await customDataProvider("$ref", objectPath, stack);
+            value = await customDataProvider("$ref", objectPath, dataPath);
         }
 
-        return await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
+        return await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
     }
 
     private static async _fillReferences(objectOrString: string | object,
@@ -170,29 +177,27 @@ export class JSONCalc {
                                          remoteDocProvider: RemoteDocProvider,
                                          remoteDocs: RemoteDocs = {},
                                          customDataProvider: CustomDataProvider,
-                                         stack: string[] = []): Promise<any> {
+                                         stack: string[] = [],
+                                         dataPath:string[] = [],
+                                         docID?:string): Promise<any> {
         if (isString(objectOrString)) {
 
             return stringReplaceAsync(
                 (objectOrString as string),
                 new RegExp(JSONCalc.STRING_REFERENCE, "g"),
                 async (fullRef, location, objectPath) => {
-
                     //try {
-                        let value = await JSONCalc._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                    let value = await JSONCalc._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
 
-                        if (isNil(value)) {
-                            value = JSONCalc.MISSING_VALUE_PLACEHOLDER;
-                        } else if (isObjectLike(value)) {
-                            value = JSON.stringify(value);
-                        } else {
-                            value = value.toString();
-                        }
+                    if (isNil(value)) {
+                        value = JSONCalc.MISSING_VALUE_PLACEHOLDER;
+                    } else if (isObjectLike(value)) {
+                        value = JSON.stringify(value);
+                    } else {
+                        value = value.toString();
+                    }
 
-                        return value;
-                    /*} catch (e) {
-                        return e;
-                    }*/
+                    return value;
                 });
 
         } else if (isObjectLike(objectOrString)) {
@@ -200,29 +205,29 @@ export class JSONCalc {
             let providerData = JSONCalc._extractReferenceProviderData(objectOrString as object);
 
             if (!isNil(providerData)) {
+                // This is a reference to other data
                 if (providerData.name === JSONCalc.REFERENCE_PROVIDER_KEY && isString(providerData.options)) {
                     let reference = JSONCalc.parseReferencePath(providerData.options);
                     try {
-                        return await JSONCalc._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                        return await JSONCalc._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
                     } catch (e) {
                         return e;
                     }
                 } else {
-                    providerData.options = await JSONCalc._fillReferences(providerData.options, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                    providerData.options = await JSONCalc._fillReferences(providerData.options, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
 
                     let customData;
                     if (!isNil(customDataProvider)) {
-                        customData = await customDataProvider(providerData.name, providerData.options, stack);
-
+                        customData = await customDataProvider(providerData.name, providerData.options, dataPath);
                     }
 
                     return isUndefined(customData) ? objectOrString : customData;
                 }
             } else {
-
+                // This is a plain old object, loop through it and look for any references in it
                 let actions = map(objectOrString, (value, key) => {
                     return new Promise((resolve, reject) => {
-                        JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack).then((value) => {
+                        JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat(key), dataPath.concat(key), docID).then((value) => {
                             objectOrString[key] = value;
                             resolve();
                         }).catch(reject);

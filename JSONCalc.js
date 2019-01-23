@@ -76,11 +76,11 @@ class JSONCalc {
     static extractReferences(objectOrString) {
         return JSONCalc._extractReferences(objectOrString, []);
     }
-    static _getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs = {}, customDataProvider, stack = []) {
+    static _getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs = {}, customDataProvider, stack = [], dataPath = [], docID) {
         return __awaiter(this, void 0, void 0, function* () {
             let stackID = `${lodash_1.isNil(location) ? "" : `${location}#`}${objectPath}`;
             if (stack.indexOf(stackID) !== -1) {
-                throw new Error(`Document contains a circular reference: ${stack.join("->")}`);
+                throw new Error(`Circular reference: ${stack.join("->")}`);
             }
             stack = stack.concat([stackID]);
             let value;
@@ -91,6 +91,7 @@ class JSONCalc {
                     dataDoc = yield remoteDocProvider(location);
                     remoteDocs[location] = dataDoc;
                 }
+                docID = location;
             }
             // Traverse down the object path to see if it has any object references
             let objectPathParts = lodash_1.toPath(objectPath);
@@ -100,31 +101,32 @@ class JSONCalc {
                     currentObjectPath.push(objectPathPart);
                     let value = lodash_1.get(dataDoc, currentObjectPath);
                     let providerData = JSONCalc._extractReferenceProviderData(value);
+                    let newDataPath = lodash_1.cloneDeep(currentObjectPath);
+                    if (!lodash_1.isNil(docID) && newDataPath.length > 0) {
+                        newDataPath[0] = `${docID}#${newDataPath[0]}`;
+                    }
                     // If this contains an object reference, we need to fill the reference before we can go any further
                     if (!lodash_1.isNil(providerData)) {
-                        let result = yield JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                        let result = yield JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack, newDataPath, docID);
                         lodash_1.set(dataDoc, currentObjectPath, result);
                         break;
                     }
                 }
             }
-            // Does this value exist in our data doc?
-            if (lodash_1.has(dataDoc, objectPath)) {
-                value = lodash_1.cloneDeep(lodash_1.get(dataDoc, objectPath));
-            }
-            else if (!lodash_1.isNil(customDataProvider)) {
+            value = lodash_1.cloneDeep(lodash_1.get(dataDoc, objectPath));
+            if (lodash_1.isUndefined(value) && !lodash_1.isNil(customDataProvider)) {
                 // If this value doesn't exist, allow the CustomDataProvider to provide a value
-                value = yield customDataProvider("$ref", objectPath, stack);
+                value = yield customDataProvider("$ref", objectPath, dataPath);
             }
-            return yield JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
+            return yield JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
         });
     }
-    static _fillReferences(objectOrString, dataDoc, remoteDocProvider, remoteDocs = {}, customDataProvider, stack = []) {
+    static _fillReferences(objectOrString, dataDoc, remoteDocProvider, remoteDocs = {}, customDataProvider, stack = [], dataPath = [], docID) {
         return __awaiter(this, void 0, void 0, function* () {
             if (lodash_1.isString(objectOrString)) {
                 return stringReplaceAsync(objectOrString, new RegExp(JSONCalc.STRING_REFERENCE, "g"), (fullRef, location, objectPath) => __awaiter(this, void 0, void 0, function* () {
                     //try {
-                    let value = yield JSONCalc._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                    let value = yield JSONCalc._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
                     if (lodash_1.isNil(value)) {
                         value = JSONCalc.MISSING_VALUE_PLACEHOLDER;
                     }
@@ -135,36 +137,35 @@ class JSONCalc {
                         value = value.toString();
                     }
                     return value;
-                    /*} catch (e) {
-                        return e;
-                    }*/
                 }));
             }
             else if (lodash_1.isObjectLike(objectOrString)) {
                 let providerData = JSONCalc._extractReferenceProviderData(objectOrString);
                 if (!lodash_1.isNil(providerData)) {
+                    // This is a reference to other data
                     if (providerData.name === JSONCalc.REFERENCE_PROVIDER_KEY && lodash_1.isString(providerData.options)) {
                         let reference = JSONCalc.parseReferencePath(providerData.options);
                         try {
-                            return yield JSONCalc._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                            return yield JSONCalc._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
                         }
                         catch (e) {
                             return e;
                         }
                     }
                     else {
-                        providerData.options = yield JSONCalc._fillReferences(providerData.options, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack);
+                        providerData.options = yield JSONCalc._fillReferences(providerData.options, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
                         let customData;
                         if (!lodash_1.isNil(customDataProvider)) {
-                            customData = yield customDataProvider(providerData.name, providerData.options, stack);
+                            customData = yield customDataProvider(providerData.name, providerData.options, dataPath);
                         }
                         return lodash_1.isUndefined(customData) ? objectOrString : customData;
                     }
                 }
                 else {
+                    // This is a plain old object, loop through it and look for any references in it
                     let actions = lodash_1.map(objectOrString, (value, key) => {
                         return new Promise((resolve, reject) => {
-                            JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack).then((value) => {
+                            JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat(key), dataPath.concat(key), docID).then((value) => {
                                 objectOrString[key] = value;
                                 resolve();
                             }).catch(reject);
