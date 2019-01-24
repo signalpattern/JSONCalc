@@ -1,32 +1,37 @@
 import {get, set, isString, isObjectLike, each, map, has, isNil, cloneDeep, uniqBy, findKey, toPath, isUndefined} from "lodash";
 import * as stringReplaceAsync from "string-replace-async";
 
-type RemoteDocs = { [location: string]: any };
+//type RemoteDocs = { [location: string]: any };
 
 /**
  * A reference.
  */
-export interface Reference {
+
+/*export interface Reference {
     location?: string;
     objectPath?: string;
-}
+}*/
 
-interface ReferenceProviderData {
+interface CustomCalcOptions {
     name: string;
     options: any;
 }
 
 
-export type RemoteDocProvider = (location: string) => Promise<any>;
-export type CustomDataProvider = (providerName: string, providerOptions?: any, dataPath?: string[]) => Promise<any>;
+//export type RemoteDocProvider = (location: string) => Promise<any>;
+export type CustomCalcProvider = (providerName: string, providerOptions?: any, dataPath?: string[]) => Promise<any>;
 
 export class JSONCalc {
 
-    static REFERENCE_PATH = "(?:(.+?)#)?(.+)";
+    static CUSTOM_CALC_KEY_PREFIX = "$";
+    static STRING_REFERENCE_REGEX = "{{(.+?)}}";
+    static MISSING_VALUE_PLACEHOLDER = "#VALUE!";
+
+    /*static REFERENCE_PATH = "(?:(.+?)#)?(.+)";
     static STRING_REFERENCE = `{{(?:(.+?)#)?(.+?)}}`;
     static PROVIDER_PREFIX = "$";
     static REFERENCE_PROVIDER_KEY = `${JSONCalc.PROVIDER_PREFIX}ref`;
-    static MISSING_VALUE_PLACEHOLDER = "#VALUE!";
+
 
     private static _extractReferences(objectOrString: any, path: string[]): Reference[] {
         let foundReferences: Reference[] = [];
@@ -58,11 +63,11 @@ export class JSONCalc {
         }
 
         return uniqBy(foundReferences, (reference: Reference) => reference.location + reference.objectPath);
-    }
+    }*/
 
-    private static _extractReferenceProviderData(theObject: object): ReferenceProviderData {
+    private static _extractCustomCalcOptions(theObject: object): CustomCalcOptions {
         let providerName = findKey(theObject, (keyValue, keyName) => {
-            return keyName.indexOf(JSONCalc.PROVIDER_PREFIX) === 0;
+            return keyName.indexOf(JSONCalc.CUSTOM_CALC_KEY_PREFIX) === 0;
         });
 
         if (!isNil(providerName)) {
@@ -79,7 +84,7 @@ export class JSONCalc {
      * Will parse a reference path into the individual constituents.
      * @param referenceString - A string in the form of `[remoteURI#]localPath`. See readme for more details.
      */
-    static parseReferencePath(referenceString: string): Reference {
+    /*static parseReferencePath(referenceString: string): Reference {
 
         let returnReference: Reference;
 
@@ -94,47 +99,26 @@ export class JSONCalc {
         });
 
         return returnReference;
-    }
+    }*/
 
     /**
      * Extract a list of references within a string or an object
      * @param objectOrString - The string or object to extract references from.
      */
-    static extractReferences(objectOrString: any): Reference[] {
+    /*static extractReferences(objectOrString: any): Reference[] {
         return JSONCalc._extractReferences(objectOrString, []);
-    }
+    }*/
 
-    private static async _getReferenceValue(dataDoc: any,
-                                            location: string,
+    /*private static async _getReferenceValue(dataDoc: any,
+                                            dataDocLocation: string,
                                             objectPath: string,
                                             remoteDocProvider: RemoteDocProvider,
                                             remoteDocs: RemoteDocs = {},
-                                            customDataProvider: CustomDataProvider,
+                                            customDataProvider: CustomCalcProvider,
                                             stack: string[] = [],
-                                            dataPath:string[] = [],
-                                            docID?:string): Promise<any> {
-
-        let stackID = `${isNil(location) ? "" : `${location}#`}${objectPath}`;
-
-        if (stack.indexOf(stackID) !== -1) {
-            throw new Error(`Circular reference: ${stack.join("->")}`);
-        }
-
-        stack = stack.concat([stackID]);
+                                            dataPath: string[] = []): Promise<any> {
 
         let value;
-
-        // This is a remote document
-        if (!isNil(location)) {
-            dataDoc = remoteDocs[location];
-
-            if (isNil(dataDoc) && !isNil(remoteDocProvider)) {
-                dataDoc = await remoteDocProvider(location);
-                remoteDocs[location] = dataDoc;
-            }
-
-            docID = location;
-        }
 
         // Traverse down the object path to see if it has any object references
         let objectPathParts = toPath(objectPath);
@@ -144,18 +128,17 @@ export class JSONCalc {
                 currentObjectPath.push(objectPathPart);
 
                 let value = get(dataDoc, currentObjectPath);
-                let providerData = JSONCalc._extractReferenceProviderData(value);
+                let providerData = JSONCalc._extractCustomCalcOptions(value);
 
                 let newDataPath = cloneDeep(currentObjectPath);
 
-                if(!isNil(docID) && newDataPath.length > 0)
-                {
-                    newDataPath[0] = `${docID}#${newDataPath[0]}`;
+                if (!isNil(dataDocLocation) && newDataPath.length > 0) {
+                    newDataPath[0] = `${dataDocLocation}#${newDataPath[0]}`;
                 }
 
                 // If this contains an object reference, we need to fill the reference before we can go any further
                 if (!isNil(providerData)) {
-                    let result = await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack, newDataPath, docID);
+                    let result = await JSONCalc._fillReferences(value, dataDocLocation, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack, newDataPath);
                     set(dataDoc, currentObjectPath, result);
                     break;
                 }
@@ -164,30 +147,50 @@ export class JSONCalc {
 
         value = cloneDeep(get(dataDoc, objectPath));
 
+        // If the value is undefined, can we get this from a remote doc?
+        if (isUndefined(value) && !isNil(remoteDocProvider)) {
+            let reference = JSONCalc.parseReferencePath(objectPath);
+            if (!isNil(reference.location)) {
+                let remoteDoc = remoteDocs[reference.location];
+
+                if (isNil(remoteDoc) && !isNil(remoteDocProvider)) {
+                    remoteDoc = await remoteDocProvider(reference.location);
+                    remoteDocs[reference.location] = remoteDoc;
+                }
+
+                dataDoc = cloneDeep(remoteDoc);
+                dataDocLocation = reference.location;
+
+                return JSONCalc._getReferenceValue(dataDoc, dataDocLocation, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath);
+            }
+        }
+
         if (isUndefined(value) && !isNil(customDataProvider)) {
             // If this value doesn't exist, allow the CustomDataProvider to provide a value
             value = await customDataProvider("$ref", objectPath, dataPath);
         }
 
-        return await JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
+        return JSONCalc._fillReferences(value, dataDocLocation, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath);
     }
 
     private static async _fillReferences(objectOrString: string | object,
                                          dataDoc: any,
+                                         dataDocLocation: string,
                                          remoteDocProvider: RemoteDocProvider,
                                          remoteDocs: RemoteDocs = {},
-                                         customDataProvider: CustomDataProvider,
+                                         customDataProvider: CustomCalcProvider,
                                          stack: string[] = [],
-                                         dataPath:string[] = [],
-                                         docID?:string): Promise<any> {
+                                         dataPath: string[] = []): Promise<any> {
         if (isString(objectOrString)) {
-
+            // This is a string, replace any string references in the form of {{reference}}
             return stringReplaceAsync(
-                (objectOrString as string),
+                objectOrString as string,
                 new RegExp(JSONCalc.STRING_REFERENCE, "g"),
-                async (fullRef, location, objectPath) => {
-                    //try {
-                    let value = await JSONCalc._getReferenceValue(dataDoc, location, objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
+                async (fullRef: string) => {
+
+                    fullRef = fullRef.replace(/[{}]/g, "");
+
+                    let value = await JSONCalc._getReferenceValue(dataDoc, dataDocLocation, fullRef, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath);
 
                     if (isNil(value)) {
                         value = JSONCalc.MISSING_VALUE_PLACEHOLDER;
@@ -201,20 +204,20 @@ export class JSONCalc {
                 });
 
         } else if (isObjectLike(objectOrString)) {
-
-            let providerData = JSONCalc._extractReferenceProviderData(objectOrString as object);
+            // Does this have a custom data action?
+            let providerData = JSONCalc._extractCustomCalcOptions(objectOrString as object);
 
             if (!isNil(providerData)) {
                 // This is a reference to other data
                 if (providerData.name === JSONCalc.REFERENCE_PROVIDER_KEY && isString(providerData.options)) {
-                    let reference = JSONCalc.parseReferencePath(providerData.options);
+
                     try {
-                        return await JSONCalc._getReferenceValue(dataDoc, reference.location, reference.objectPath, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
+                        return await JSONCalc._getReferenceValue(dataDoc, dataDocLocation, providerData.options, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath);
                     } catch (e) {
                         return e;
                     }
                 } else {
-                    providerData.options = await JSONCalc._fillReferences(providerData.options, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath, docID);
+                    providerData.options = await JSONCalc._fillReferences(providerData.options, dataDoc, dataDocLocation, remoteDocProvider, remoteDocs, customDataProvider, stack, dataPath);
 
                     let customData;
                     if (!isNil(customDataProvider)) {
@@ -227,7 +230,7 @@ export class JSONCalc {
                 // This is a plain old object, loop through it and look for any references in it
                 let actions = map(objectOrString, (value, key) => {
                     return new Promise((resolve, reject) => {
-                        JSONCalc._fillReferences(value, dataDoc, remoteDocProvider, remoteDocs, customDataProvider, stack.concat(key), dataPath.concat(key), docID).then((value) => {
+                        JSONCalc._fillReferences(value, dataDoc, dataDocLocation, remoteDocProvider, remoteDocs, customDataProvider, stack.concat(key), dataPath.concat(key)).then((value) => {
                             objectOrString[key] = value;
                             resolve();
                         }).catch(reject);
@@ -239,6 +242,113 @@ export class JSONCalc {
         }
 
         return objectOrString;
+    }*/
+
+    private static async _processCustomCalcOptions(calcOption: CustomCalcOptions,
+                                                   calculatorDoc: object,
+                                                   customCalcProvider: CustomCalcProvider,
+                                                   refStack: string[] = []): Promise<any> {
+        switch (calcOption.name) {
+            case "$ref": {
+                let referencePathString = calcOption.options;
+
+                if (refStack.indexOf(referencePathString) !== -1) {
+                    throw new Error(`Circular reference: ${refStack.join("->")}`);
+                }
+
+                let currentPath = toPath(referencePathString);
+                let objectValue;
+
+                while(currentPath.length > 0)
+                {
+                    if(has(calculatorDoc, currentPath))
+                    {
+                        objectValue = get(calculatorDoc, currentPath);
+                        break;
+                    }
+
+                    currentPath.pop();
+                }
+
+                // Give the custom calc provider an opportunity to give a value
+                if(isUndefined(objectValue) && !isNil(customCalcProvider))
+                {
+                    objectValue = await customCalcProvider(calcOption.name, calcOption.options);
+                }
+                else
+                {
+                    objectValue = await JSONCalc._calculate(objectValue, calculatorDoc, customCalcProvider, refStack.concat([referencePathString]));
+                }
+
+                if(!isUndefined(objectValue))
+                {
+                    if(currentPath.length > 0)
+                    {
+                        set(calculatorDoc, currentPath, objectValue);
+                        return get(calculatorDoc, referencePathString);
+                    }
+
+                    return objectValue;
+                }
+
+                return undefined;
+            }
+            default: {
+                if (!isNil(customCalcProvider)) {
+                    return customCalcProvider(calcOption.name, calcOption.options);
+                }
+            }
+        }
+    }
+
+    private static async _calculate(objectToCalculate: string | object,
+                                    calculatorDoc: object,
+                                    customCalcProvider?: CustomCalcProvider,
+                                    refStack: string[] = []): Promise<any> {
+
+        if (isString(objectToCalculate)) {
+            // This is a string, let's go through and replace any references in the form of {{reference}}
+            return stringReplaceAsync(
+                objectToCalculate as string,
+                new RegExp(JSONCalc.STRING_REFERENCE_REGEX, "g"),
+                async (fullRef: string, refString: string) => {
+                    let returnString = await JSONCalc._processCustomCalcOptions({name: "$ref", options: refString}, calculatorDoc, customCalcProvider, refStack);
+
+                    if(isNil(returnString))
+                    {
+                        returnString = JSONCalc.MISSING_VALUE_PLACEHOLDER;
+                    }
+                    else if(isObjectLike(returnString))
+                    {
+                        returnString = JSON.stringify(returnString);
+                    }
+
+                    return returnString;
+                });
+
+        } else if (isObjectLike(objectToCalculate)) {
+            let customCalcOptions = JSONCalc._extractCustomCalcOptions(objectToCalculate as object);
+
+            if (!isNil(customCalcOptions)) {
+                // This is a custom calc object.
+                return JSONCalc._processCustomCalcOptions(customCalcOptions, calculatorDoc, customCalcProvider, refStack)
+            } else {
+                // This is just a standard object. Loop through every key, value and process each.
+                let promises = map(objectToCalculate, async (value, key) => {
+                    objectToCalculate[key] = await JSONCalc._calculate(value, calculatorDoc, customCalcProvider, refStack);
+                });
+
+                await Promise.all(promises);
+            }
+        }
+
+        return objectToCalculate;
+    }
+
+    static async calculate(objectToCalculate: object | string,
+                           calculatorDoc: object,
+                           customCalcProvider?: CustomCalcProvider): Promise<any> {
+        return this._calculate(objectToCalculate, calculatorDoc, customCalcProvider);
     }
 
     /**
@@ -248,12 +358,12 @@ export class JSONCalc {
      * @param remoteDocProvider - A callback that will be invoked when a remote document is referenced and needed.
      * @param customDataProvider - A callback that will be invoked when a custom data accessor is encountered.
      */
-    static async fillReferences(objectOrString: string | object,
+    /*static async fillReferences(objectOrString: string | object,
                                 dataDoc: any,
                                 remoteDocProvider?: RemoteDocProvider,
-                                customDataProvider?: CustomDataProvider): Promise<any> {
-        return JSONCalc._fillReferences(objectOrString, dataDoc, remoteDocProvider, {}, customDataProvider);
-    }
+                                customDataProvider?: CustomCalcProvider): Promise<any> {
+        return JSONCalc._fillReferences(objectOrString, dataDoc, null, remoteDocProvider, {}, customDataProvider);
+    }*/
 
     /**
      * Fill references in an object at the given path.
@@ -263,10 +373,10 @@ export class JSONCalc {
      * @param customDataProvider - A callback that will be invoked when a custom data accessor is encountered.
      * @param defaultValue - If no value is found, this optional value will be returned.
      */
-    static async get(object: object,
+    /*static async get(object: object,
                      path: string | string[],
                      remoteDocProvider?: RemoteDocProvider,
-                     customDataProvider?: CustomDataProvider,
+                     customDataProvider?: CustomCalcProvider,
                      defaultValue?: any): Promise<any> {
         let dataDoc = cloneDeep(object);
         let value = isNil(path) || path.length === 0 ? dataDoc : get(object, path);
@@ -278,5 +388,5 @@ export class JSONCalc {
         }
 
         return value;
-    }
+    }*/
 }
