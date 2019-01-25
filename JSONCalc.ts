@@ -6,7 +6,7 @@ interface CustomCalcOptions {
     options: any;
 }
 
-export type CustomCalcProvider = (providerName: string, providerOptions?: any, dataPath?: string[]) => Promise<any>;
+export type CustomCalcProvider = (providerName: string, providerOptions?: any, refStack?:string[]) => Promise<any>;
 
 export class JSONCalc {
 
@@ -58,7 +58,7 @@ export class JSONCalc {
                 // Give the custom calc provider an opportunity to give a value
                 if(isUndefined(objectValue) && !isNil(customCalcProvider))
                 {
-                    objectValue = await customCalcProvider(calcOption.name, calcOption.options);
+                    objectValue = await customCalcProvider(calcOption.name, calcOption.options, refStack);
                 }
                 else
                 {
@@ -82,7 +82,7 @@ export class JSONCalc {
                 let options = await JSONCalc.calculate(calcOption.options, calculatorDoc, customCalcProvider);
 
                 if (!isNil(customCalcProvider)) {
-                    return customCalcProvider(calcOption.name, options);
+                    return customCalcProvider(calcOption.name, options, refStack);
                 }
             }
         }

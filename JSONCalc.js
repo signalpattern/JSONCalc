@@ -42,7 +42,7 @@ class JSONCalc {
                     }
                     // Give the custom calc provider an opportunity to give a value
                     if (lodash_1.isUndefined(objectValue) && !lodash_1.isNil(customCalcProvider)) {
-                        objectValue = yield customCalcProvider(calcOption.name, calcOption.options);
+                        objectValue = yield customCalcProvider(calcOption.name, calcOption.options, refStack);
                     }
                     else {
                         objectValue = yield JSONCalc._calculate(objectValue, calculatorDoc, customCalcProvider, refStack.concat([referencePathString]));
@@ -59,7 +59,7 @@ class JSONCalc {
                 default: {
                     let options = yield JSONCalc.calculate(calcOption.options, calculatorDoc, customCalcProvider);
                     if (!lodash_1.isNil(customCalcProvider)) {
-                        return customCalcProvider(calcOption.name, options);
+                        return customCalcProvider(calcOption.name, options, refStack);
                     }
                 }
             }
