@@ -8,152 +8,91 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const assert = require("assert");
 const JSONCalc_1 = require("../JSONCalc");
-let remoteDocs = {
-    "test/test": {
-        "object1": "Object 1 Remote",
-        "object2": "{{test}}",
-        "test": "Object 2 Remote"
-    }
-};
-function remoteDocProvider(location) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return remoteDocs[location];
-    });
-}
-function actionExecutionProvider(actionName, actionOptions) {
-    return __awaiter(this, void 0, void 0, function* () {
-        switch (actionName) {
-            case "$http": {
-                return {
-                    status: 200,
-                    url: actionOptions.url
-                };
+describe("calculate", () => {
+    it("should calculate a simple string reference", () => __awaiter(this, void 0, void 0, function* () {
+        let result = yield JSONCalc_1.JSONCalc.calculate("this is {{object1}}", {
+            object1: "cool!"
+        });
+        assert.strictEqual(result, "this is cool!");
+    }));
+    it("calculate a complex string reference", () => __awaiter(this, void 0, void 0, function* () {
+        let result = yield JSONCalc_1.JSONCalc.calculate("this is {{object1.subObject1}}", {
+            object1: {
+                subObject1: "cool!"
             }
-            case "$ref": {
-                return "unknown";
+        });
+        assert.strictEqual(result, "this is cool!");
+    }));
+    it("should calculate a simple object reference", () => __awaiter(this, void 0, void 0, function* () {
+        let result = yield JSONCalc_1.JSONCalc.calculate({ test: { $ref: "object1" } }, {
+            object1: "cool!"
+        });
+        assert.deepStrictEqual(result, { test: "cool!" });
+    }));
+    it("should calculate a complex object reference", () => __awaiter(this, void 0, void 0, function* () {
+        let result = yield JSONCalc_1.JSONCalc.calculate({ test: { $ref: "object1.subObject1" } }, {
+            object1: {
+                subObject1: "cool!"
             }
-        }
-    });
-}
-test("parsing a local reference path", () => {
-    expect(JSONCalc_1.JSONCalc.parseReferencePath("foo.bar.test"))
-        .toEqual({ location: undefined, objectPath: "foo.bar.test" });
-});
-test("parsing a remote reference path", () => {
-    expect(JSONCalc_1.JSONCalc.parseReferencePath("test/test#foo.bar.test"))
-        .toEqual({ location: "test/test", objectPath: "foo.bar.test" });
-});
-test("extracting references", () => {
-    expect(JSONCalc_1.JSONCalc.extractReferences({
-        "test1": "{{object1}}",
-        "test2": "{{test/test#object1}}",
-        "test3": { "$ref": "object2" },
-        "test4": { "$ref": "test/test#object2" }
-    }))
-        .toEqual(expect.arrayContaining([
-        expect.objectContaining({ location: undefined, objectPath: "object1" }),
-        expect.objectContaining({ location: "test/test", objectPath: "object1" }),
-        expect.objectContaining({ location: undefined, objectPath: "object2" }),
-        expect.objectContaining({ location: "test/test", objectPath: "object2" }),
-    ]));
-});
-test("filling references", () => __awaiter(this, void 0, void 0, function* () {
-    expect(yield JSONCalc_1.JSONCalc.fillReferences({
-        "test1": "{{object1}}",
-        "test2": "{{test/test#object1}}",
-        "test3": { "$ref": "object2" },
-        "test4": { "$ref": "test/test#object2" }
-    }, {
-        "object1": "Object 1 Local",
-        "object2": "Object 2 Local"
-    }, remoteDocProvider))
-        .toEqual({
-        "test1": "Object 1 Local",
-        "test2": "Object 1 Remote",
-        "test3": "Object 2 Local",
-        "test4": "Object 2 Remote"
-    });
-}));
-test("filling references with an unknown reference", () => __awaiter(this, void 0, void 0, function* () {
-    expect(yield JSONCalc_1.JSONCalc.fillReferences({
-        "test1": "{{object1}}",
-    }, {}, remoteDocProvider, actionExecutionProvider))
-        .toEqual({
-        "test1": "unknown"
-    });
-}));
-test("catching circular references", () => __awaiter(this, void 0, void 0, function* () {
-    yield expect(JSONCalc_1.JSONCalc.fillReferences({
-        "test1": "{{object1}}"
-    }, {
-        "object1": "{{object2.level1}}",
-        "object2": {
-            "level1": "{{object1}}"
-        }
-    }, remoteDocProvider))
-        .rejects
-        .toThrow();
-}));
-test("executing a simple action 2", () => __awaiter(this, void 0, void 0, function* () {
-    expect(yield JSONCalc_1.JSONCalc.fillReferences({
-        "test1": { "$ref": "get_google" },
-        "test2": { "$ref": "get_multi" }
-    }, {
-        "get_google": {
-            "$http": {
-                "url": "http://www.google.com"
+        });
+        assert.deepStrictEqual(result, { test: "cool!" });
+    }));
+    it("should calculate a multi-step complex object reference", () => __awaiter(this, void 0, void 0, function* () {
+        let calcDoc = {
+            object1: {
+                subObject1: { $ref: "object2" }
+            },
+            object2: {
+                subObject2: "cool!"
             }
-        },
-        "get_multi": {
-            "$http": {
-                "url": {
-                    "$ref": "get_google"
+        };
+        let result = yield JSONCalc_1.JSONCalc.calculate({ test: { $ref: "object1.subObject1.subObject2" } }, calcDoc);
+        assert.deepStrictEqual(result, { test: "cool!" });
+    }));
+    it("should modify the calcDoc after calculating", () => __awaiter(this, void 0, void 0, function* () {
+        let calcDoc = {
+            object1: {
+                subObject1: { $ref: "object2" }
+            },
+            object2: {
+                subObject2: "cool!"
+            }
+        };
+        let result = yield JSONCalc_1.JSONCalc.calculate({ test: { $ref: "object1.subObject1.subObject2" } }, calcDoc);
+        assert.deepStrictEqual(calcDoc, {
+            object1: {
+                subObject1: {
+                    subObject2: "cool!"
                 }
+            },
+            object2: {
+                subObject2: "cool!"
             }
-        }
-    }, remoteDocProvider, actionExecutionProvider))
-        .toEqual({
-        "test1": {
-            status: 200,
-            url: "http://www.google.com"
-        },
-        "test2": {
-            status: 200,
-            url: {
-                status: 200,
-                url: "http://www.google.com"
-            }
-        }
-    });
-}));
-test("executing a complex action", () => __awaiter(this, void 0, void 0, function* () {
-    expect(yield JSONCalc_1.JSONCalc.fillReferences({
-        "test1": { "$ref": "get_google.url" },
-        "test2": { "$ref": "get_multi" }
-    }, {
-        "get_google": {
-            "$http": {
-                "url": "http://www.google.com"
-            }
-        },
-        "get_multi": {
-            "$http": {
-                "url": {
-                    "$ref": "get_google"
+        });
+    }));
+    it("should detect a circular reference", () => __awaiter(this, void 0, void 0, function* () {
+        try {
+            yield JSONCalc_1.JSONCalc.calculate({ test: { $ref: "object1" } }, {
+                object1: "{{object2}}",
+                object2: {
+                    subObject1: "{{object1}}"
                 }
-            }
+            });
         }
-    }, remoteDocProvider, actionExecutionProvider))
-        .toEqual({
-        "test1": "http://www.google.com",
-        "test2": {
-            status: 200,
-            url: {
-                status: 200,
-                url: "http://www.google.com"
-            }
+        catch (e) {
+            return;
         }
-    });
-}));
+        assert.fail("Should throw an exception");
+    }));
+    it("should calculate a with custom calculation with a missing reference", () => __awaiter(this, void 0, void 0, function* () {
+        let result = yield JSONCalc_1.JSONCalc.calculate("this is {{not_here.value}}", {}, (name, options) => __awaiter(this, void 0, void 0, function* () {
+            if (name === "$ref" && options === "not_here.value") {
+                return "cool!";
+            }
+        }));
+        assert.strictEqual(result, "this is cool!");
+    }));
+});
 //# sourceMappingURL=JSONCalc.test.js.map

@@ -1,157 +1,113 @@
+import * as assert from "assert";
 import {JSONCalc} from "../JSONCalc";
 
-let remoteDocs = {
-    "test/test": {
-        "object1": "Object 1 Remote",
-        "object2": "{{test}}",
-        "test": "Object 2 Remote"
-    }
-};
+describe("calculate", () => {
+    it("should calculate a simple string reference", async () => {
 
-async function remoteDocProvider(location: string): Promise<any> {
-    return remoteDocs[location];
-}
-
-async function actionExecutionProvider(actionName: string, actionOptions?: any): Promise<any> {
-    switch (actionName) {
-        case "$http": {
-            return {
-                status: 200,
-                url: actionOptions.url
-            };
-        }
-        case "$ref": {
-            return "unknown";
-        }
-    }
-}
-
-test("parsing a local reference path", () => {
-    expect(JSONCalc.parseReferencePath("foo.bar.test"))
-        .toEqual({location: undefined, objectPath: "foo.bar.test"});
-});
-
-test("parsing a remote reference path", () => {
-    expect(JSONCalc.parseReferencePath("test/test#foo.bar.test"))
-        .toEqual({location: "test/test", objectPath: "foo.bar.test"});
-});
-
-test("extracting references", () => {
-    expect(JSONCalc.extractReferences({
-        "test1": "{{object1}}",
-        "test2": "{{test/test#object1}}",
-        "test3": {"$ref": "object2"},
-        "test4": {"$ref": "test/test#object2"}
-    }))
-        .toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({location: undefined, objectPath: "object1"}),
-                expect.objectContaining({location: "test/test", objectPath: "object1"}),
-                expect.objectContaining({location: undefined, objectPath: "object2"}),
-                expect.objectContaining({location: "test/test", objectPath: "object2"}),
-            ])
-        );
-});
-
-test("filling references", async () => {
-    expect(await JSONCalc.fillReferences({
-        "test1": "{{object1}}",
-        "test2": "{{test/test#object1}}",
-        "test3": {"$ref": "object2"},
-        "test4": {"$ref": "test/test#object2"}
-    }, {
-        "object1": "Object 1 Local",
-        "object2": "Object 2 Local"
-    }, remoteDocProvider))
-        .toEqual({
-            "test1": "Object 1 Local",
-            "test2": "Object 1 Remote",
-            "test3": "Object 2 Local",
-            "test4": "Object 2 Remote"
+        let result = await JSONCalc.calculate("this is {{object1}}", {
+            object1: "cool!"
         });
-});
 
-test("filling references with an unknown reference", async () => {
-    expect(await JSONCalc.fillReferences({
-        "test1": "{{object1}}",
-    }, {}, remoteDocProvider, actionExecutionProvider))
-        .toEqual({
-            "test1": "unknown"
+        assert.strictEqual(result, "this is cool!");
+    });
+
+    it("calculate a complex string reference", async () => {
+
+        let result = await JSONCalc.calculate("this is {{object1.subObject1}}", {
+            object1: {
+                subObject1: "cool!"
+            }
         });
-});
 
-test("catching circular references", async () => {
-    await expect(JSONCalc.fillReferences({
-        "test1": "{{object1}}"
-    }, {
-        "object1": "{{object2.level1}}",
-        "object2": {
-            "level1": "{{object1}}"
-        }
-    }, remoteDocProvider))
-        .rejects
-        .toThrow()
-});
+        assert.strictEqual(result, "this is cool!");
+    });
 
-test("executing a simple action 2", async () => {
-    expect(await JSONCalc.fillReferences({
-        "test1": {"$ref": "get_google"},
-        "test2": {"$ref": "get_multi"}
-    }, {
-        "get_google": {
-            "$http": {
-                "url": "http://www.google.com"
+    it("should calculate a simple object reference", async () => {
+
+        let result = await JSONCalc.calculate({test: {$ref: "object1"}}, {
+            object1: "cool!"
+        });
+
+        assert.deepStrictEqual(result, {test: "cool!"});
+    });
+
+    it("should calculate a complex object reference", async () => {
+
+        let result = await JSONCalc.calculate({test: {$ref: "object1.subObject1"}}, {
+            object1: {
+                subObject1: "cool!"
             }
-        },
-        "get_multi": {
-            "$http": {
-                "url": {
-                    "$ref": "get_google"
-                }
-            }
-        }
-    }, remoteDocProvider, actionExecutionProvider))
-        .toEqual({
-            "test1": {
-                status: 200,
-                url: "http://www.google.com"
+        });
+
+        assert.deepStrictEqual(result, {test: "cool!"});
+    });
+
+    it("should calculate a multi-step complex object reference", async () => {
+
+        let calcDoc = {
+            object1: {
+                subObject1: {$ref: "object2"}
             },
-            "test2": {
-                status: 200,
-                url: {
-                    status: 200,
-                    url: "http://www.google.com"
-                }
+            object2: {
+                subObject2: "cool!"
             }
-        });
-});
+        };
 
-test("executing a complex action", async () => {
-    expect(await JSONCalc.fillReferences({
-        "test1": {"$ref": "get_google.url"},
-        "test2": {"$ref": "get_multi"}
-    }, {
-        "get_google": {
-            "$http": {
-                "url": "http://www.google.com"
+        let result = await JSONCalc.calculate({test: {$ref: "object1.subObject1.subObject2"}}, calcDoc);
+
+        assert.deepStrictEqual(result, {test: "cool!"});
+    });
+
+    it("should modify the calcDoc after calculating", async () => {
+
+        let calcDoc = {
+            object1: {
+                subObject1: {$ref: "object2"}
+            },
+            object2: {
+                subObject2: "cool!"
             }
-        },
-        "get_multi": {
-            "$http": {
-                "url": {
-                    "$ref": "get_google"
+        };
+
+        let result = await JSONCalc.calculate({test: {$ref: "object1.subObject1.subObject2"}}, calcDoc);
+
+        assert.deepStrictEqual(calcDoc, {
+            object1: {
+                subObject1: {
+                    subObject2: "cool!"
                 }
-            }
-        }
-    }, remoteDocProvider, actionExecutionProvider))
-        .toEqual({
-            "test1": "http://www.google.com",
-            "test2": {
-                status: 200,
-                url: {
-                    status: 200,
-                    url: "http://www.google.com"
-                }
+            },
+            object2: {
+                subObject2: "cool!"
             }
         });
+    });
+
+    it("should detect a circular reference", async () => {
+        try {
+            await JSONCalc.calculate({test: {$ref: "object1"}}, {
+                object1: "{{object2}}",
+                object2: {
+                    subObject1: "{{object1}}"
+                }
+            });
+        } catch (e) {
+            return;
+        }
+
+        assert.fail("Should throw an exception");
+    });
+
+    it("should calculate a with custom calculation with a missing reference", async () => {
+
+        let result = await JSONCalc.calculate("this is {{not_here.value}}",
+            {},
+            async (name, options) => {
+                if (name === "$ref" && options === "not_here.value") {
+                    return "cool!";
+                }
+            });
+
+        assert.strictEqual(result, "this is cool!");
+    });
 });
