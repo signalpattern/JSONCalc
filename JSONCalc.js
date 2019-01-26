@@ -87,11 +87,11 @@ class JSONCalc {
                     return JSONCalc._processCustomCalcOptions(customCalcOptions, calculatorDoc, customCalcProvider, refStack);
                 }
                 else {
-                    // This is just a standard object. Loop through every key, value and process each.
-                    let promises = lodash_1.map(objectToCalculate, (value, key) => __awaiter(this, void 0, void 0, function* () {
+                    let objectKeys = Object.keys(objectToCalculate);
+                    for (let key of objectKeys) {
+                        let value = objectToCalculate[key];
                         objectToCalculate[key] = yield JSONCalc._calculate(value, calculatorDoc, customCalcProvider, refStack);
-                    }));
-                    yield Promise.all(promises);
+                    }
                 }
             }
             return objectToCalculate;

@@ -120,12 +120,12 @@ export class JSONCalc {
                 // This is a custom calc object.
                 return JSONCalc._processCustomCalcOptions(customCalcOptions, calculatorDoc, customCalcProvider, refStack)
             } else {
-                // This is just a standard object. Loop through every key, value and process each.
-                let promises = map(objectToCalculate, async (value, key) => {
+                let objectKeys = Object.keys(objectToCalculate);
+                for(let key of objectKeys)
+                {
+                    let value = objectToCalculate[key];
                     objectToCalculate[key] = await JSONCalc._calculate(value, calculatorDoc, customCalcProvider, refStack);
-                });
-
-                await Promise.all(promises);
+                }
             }
         }
 
