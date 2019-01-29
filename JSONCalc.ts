@@ -1,4 +1,4 @@
-import {get, set, isString, isObjectLike, each, map, has, isNil, cloneDeep, uniqBy, findKey, toPath, isUndefined} from "lodash";
+import {get, set, isString, isObjectLike, has, isNil, cloneDeep, uniqBy, findKey, toPath, isUndefined} from "lodash";
 import * as stringReplaceAsync from "string-replace-async";
 
 interface CustomCalcOptions {
@@ -76,7 +76,7 @@ export class JSONCalc {
                     return objectValue;
                 }
 
-                return undefined;
+                return;
             }
             default: {
                 let options = await JSONCalc.calculate(calcOption.options, calculatorDoc, customCalcProvider);
@@ -95,7 +95,7 @@ export class JSONCalc {
 
         if (isString(objectToCalculate)) {
             // This is a string, let's go through and replace any references in the form of {{reference}}
-            return stringReplaceAsync(
+            return stringReplaceAsync.seq(
                 objectToCalculate as string,
                 new RegExp(JSONCalc.STRING_REFERENCE_REGEX, "g"),
                 async (fullRef: string, refString: string) => {
