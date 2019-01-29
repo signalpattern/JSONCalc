@@ -1,4 +1,4 @@
-import {get, set, isString, isObjectLike, has, isNil, cloneDeep, uniqBy, findKey, toPath, isUndefined} from "lodash";
+import {get, set, isString, isObjectLike, has, isNil, cloneDeep, uniqBy, findKey, toPath} from "lodash";
 import * as stringReplaceAsync from "string-replace-async";
 
 interface CustomCalcOptions {
@@ -56,7 +56,7 @@ export class JSONCalc {
                 }
 
                 // Give the custom calc provider an opportunity to give a value
-                if(isUndefined(objectValue) && !isNil(customCalcProvider))
+                if(isNil(objectValue) && !isNil(customCalcProvider))
                 {
                     objectValue = await customCalcProvider(calcOption.name, calcOption.options, refStack);
                 }
@@ -65,7 +65,7 @@ export class JSONCalc {
                     objectValue = await JSONCalc._calculate(objectValue, calculatorDoc, customCalcProvider, refStack.concat([referencePathString]));
                 }
 
-                if(!isUndefined(objectValue))
+                if(!isNil(objectValue))
                 {
                     if(currentPath.length > 0)
                     {

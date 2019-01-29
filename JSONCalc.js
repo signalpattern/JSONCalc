@@ -41,13 +41,13 @@ class JSONCalc {
                         currentPath.pop();
                     }
                     // Give the custom calc provider an opportunity to give a value
-                    if (lodash_1.isUndefined(objectValue) && !lodash_1.isNil(customCalcProvider)) {
+                    if (lodash_1.isNil(objectValue) && !lodash_1.isNil(customCalcProvider)) {
                         objectValue = yield customCalcProvider(calcOption.name, calcOption.options, refStack);
                     }
                     else {
                         objectValue = yield JSONCalc._calculate(objectValue, calculatorDoc, customCalcProvider, refStack.concat([referencePathString]));
                     }
-                    if (!lodash_1.isUndefined(objectValue)) {
+                    if (!lodash_1.isNil(objectValue)) {
                         if (currentPath.length > 0) {
                             lodash_1.set(calculatorDoc, currentPath, objectValue);
                             return lodash_1.get(calculatorDoc, referencePathString);
